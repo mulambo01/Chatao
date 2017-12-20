@@ -1,5 +1,7 @@
 #!/usr/bin/python2
-from thread import start_new_thread
+import readline #this module improves the function raw_input()
+from multiprocessing import Process
+import signal
 import time, socket, sys, commandlist, ast, os
 path=os.path.realpath(__file__)
 path=path.split("/")
@@ -9,6 +11,10 @@ sys.path.append(path+'pycrypto-2.6.1/lib/python2.7/site-packages/')
 import Crypto
 from Crypto.PublicKey import RSA
 from Crypto import Random
+from md5 import md5
+
+PID=os.getpid()
+listening=["0"]*1
 
 class bcolors:
  HEADER = '\033[95m'
@@ -19,6 +25,7 @@ class bcolors:
  ENDC = '\033[0m'
  BOLD = '\033[1m'
  UNDERLINE = '\033[4m'
+
 if(len(sys.argv)<4):
  print "Use:", sys.argv[0],"SERVER PORT NICKNAME"
  quit()
@@ -51,11 +58,23 @@ def decrypt(msg):
   i=i+1
  return decrypted
 
-
 host=sys.argv[1]
 port=int(sys.argv[2])
 tcp=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 tcp.connect((host, port))
+
+band=5
+def senddata(data):
+ i=0
+ while(i<int(len(data)/band)):
+  tcp.send(data[i*band:(i+1)*band:])
+  tcp.recv(1)
+  i=i+1
+ if(len(data)%band!=0):
+  tcp.send(data[i*band::])
+  tcp.recv(1)
+ tcp.send("end")
+ tcp.recv(1)
 
 serverKey=str(tcp.recv(5000))
 serverKey=serverKey.replace("\\n","\n")
@@ -74,24 +93,27 @@ def encrypt(msg):
 
 nick=sys.argv[3]
 
-tcp.send(encrypt(publicascii))
-tcp.recv(1)
-tcp.send(encrypt(nick))
+senddata(encrypt(publicascii))
+senddata(encrypt(nick))
 print bcolors.OKGREEN+"You are connected!"+bcolors.ENDC
 def receive(tcp):
  while(1):
   msg=tcp.recv(10000)
   if not msg:
-   print bcolors.FAIL+"The server crashes.\nCtrl+C and try again."+bcolors.ENDC
+   print bcolors.FAIL+"The connection was closed."+bcolors.ENDC
+   os.kill(PID, signal.SIGUSR1)
    break
   try:
    print bcolors.OKBLUE+decrypt(msg)+bcolors.ENDC
-  except:
-   print "Error!"
+  except Exception as error:
+   print "Error! "+str(error)
 
 def main():
 #thread to receive messages
- start_new_thread(receive,(tcp,))
+ 
+ listening[0]=Process(target=receive, args=(tcp,))
+ print sys.getsizeof(listening[0])
+ listening[0].start()
  while(1):
   msg=raw_input()
   if msg in commandlist.list:
@@ -103,10 +125,12 @@ def main():
   elif not(msg in commandlist.avoid):
    try:
     tcp.send(encrypt(msg))
-   except:
-    print "Error!"
+   except Exception as error:
+    print "Error! "+str(error)
 try:
  main()
 except(KeyboardInterrupt):
  print bcolors.FAIL+"Disconnected"+bcolors.ENDC
+ tcp.close()
+ listening[0].terminate()
  quit()
