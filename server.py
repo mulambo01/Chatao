@@ -10,6 +10,7 @@ sys.path.append(path+'pycrypto-2.6.1/lib/python2.7/site-packages/')
 import Crypto
 from Crypto.PublicKey import RSA
 from Crypto import Random
+from md5 import md5
 
 class bcolors:
     HEADER = '\033[95m'
@@ -75,52 +76,76 @@ def encrypt(msg,index):
  encr=encr+str(key[index].encrypt(block,sizekey))
  return str(encr)
 
+def getclock():
+ time=datetime.now()
+ clock="["+str(time.hour+100)[1::]+":"+str(time.minute+100)[1::]+":"+str(time.second+100)[1::]+"] "
+ return clock
 #procedure to finish client connections
 def down(index):
- clock=datetime.now()
- timer="["+str(clock.hour+100)[1::]+":"+str(clock.minute+100)[1::]+":"+str(clock.second+100)[1::]+"] "
- print timer+"Client "+str(index)+" fell."
+ clock=getclock()
+ print clock+"Client "+str(index)+" fell."
 #the value 1 indicates that the socket was in using but now is free, 0 means that the socket is virgin
- msg=bcolors.FAIL+timer+"User "+nick[index]+" exits."+bcolors.ENDC
+ msg=bcolors.FAIL+clock+"User "+nick[index]+" exits."+bcolors.ENDC
  try:
   con[index].close()
- except:
-  print "ERROR 1  - "+str(index)
+ except Exception as error:
+  print "Error! "+str(error)
  con[index]="1"
  client[index]="1"
  nick[index]="1"
  key[index]="1"
-
  j=0
  while(j<limit and con[j]!="0"):
   if(con[j]!="1" and j!=index):
    try:
     con[j].sendall(encrypt(msg,j))
-   except:
-    print "ERROR 5"
+   except Exception as error:
+    print "Error! "+str(error)
   j=j+1
+
+def joindata(index):
+ band=250
+ try:
+  data=""
+  rec=con[index].recv(band)
+  con[index].sendall("1")
+  while(rec!="end"):
+   data=data+rec
+   rec=con[index].recv(band)
+   con[index].sendall("1")
+  return data
+ except Exception as error:
+  return "Error! "+str(error)
+
+def is_number(var):
+  try:
+    float(var)
+    return True
+  except:
+    return False
+
 #function that will manage the connection called by the index
 #all the connections will have a dedicated thread running this function
 def receive(index):
  try:
   conn=con[index]
   conn.sendall(publascii)
-  keyreceiv=str(conn.recv(10000))
+  keyreceiv=joindata(index)
   keyreceiv=decrypt(keyreceiv)
   keyreceiv=keyreceiv.replace("\\n","\n")
   key[index]=RSA.importKey(str(keyreceiv))
   keyreceiv=0
-  conn.sendall("1")
-  nick[index]=decrypt(str(conn.recv(10000)))
+  nick[index]=decrypt(joindata(index))
   Nick=nick[index]
+  if(is_number(str(Nick))):
+   conn.sendall(encrypt(bcolors.FAIL+"Your nick can\'t be a number!\n\n\n"+bcolors.ENDC, index))
+   down(index)
   print client[index],Nick,index
-
-  clock=datetime.now()
-  timer="["+str(clock.hour+100)[1::]+":"+str(clock.minute+100)[1::]+":"+str(clock.second+100)[1::]+"] "
   j=0
   while(j<limit and con[j]!="0"):
+   clock=getclock()
    if(con[j]!="1" and j!=index):
-    message=bcolors.FAIL+timer+"User "+Nick+" came into the room."+bcolors.ENDC
+    message=bcolors.FAIL+clock+"User "+Nick+" came into the room."+bcolors.ENDC
     con[j].sendall(encrypt(message,j))
    j=j+1
   while(1):
@@ -139,21 +164,20 @@ def receive(index):
      j=j+1
     conn.sendall(encrypt(str(output+bcolors.ENDC),index))
    else:
-    clock=datetime.now()
-    timer="["+str(clock.hour+100)[1::]+":"+str(clock.minute+100)[1::]+":"+str(clock.second+100)[1::]+"] "
-    msg=timer+Nick+": "+msg
+    clock=getclock()
+    msg=clock+Nick+": "+msg
     print msg, index
     j=0
     while(j<limit and con[j]!="0"):
      if(con[j]!="1" and j!=index):
       con[j].sendall(encrypt(msg,j))
      j=j+1
- except:
+ except Exception as error:
   try:
    down(index)
-   print "ERROR 2  - "+str(index)
-  except:
-   print "ERROR 3  - "+str(index)
+   print "Error! "+str(error)
+  except Exception as error:
+   print "Error! "+str(error)
 
 def main():
  print bcolors.OKGREEN+"The server is ready!"+bcolors.ENDC
@@ -191,8 +215,8 @@ except(KeyboardInterrupt):
    try:
     con[i].shutdown(socket.SHUT_RDWR)
     con[i].close()
-   except:
-    print "ERROR 4  - "+str(i)
+   except Exception as error:
+    print "Error! "+str(error)
   i=i+1
  connect.shutdown(socket.SHUT_RDWR)
  connect.close()
