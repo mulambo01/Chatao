@@ -110,9 +110,7 @@ def receive(tcp):
 
 def main():
 #thread to receive messages
- 
  listening[0]=Process(target=receive, args=(tcp,))
- print sys.getsizeof(listening[0])
  listening[0].start()
  while(1):
   msg=raw_input()
